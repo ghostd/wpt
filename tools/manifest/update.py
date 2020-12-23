@@ -53,7 +53,8 @@ def update_from_cli(**kwargs):
                              update=True,
                              rebuild=kwargs["rebuild"],
                              cache_root=kwargs["cache_root"],
-                             parallel=kwargs["parallel"])
+                             parallel=kwargs["parallel"],
+                             max_cpu_count=kwargs["max_cpu_count"])
 
 
 def abs_path(path):
@@ -86,6 +87,9 @@ def create_parser():
     parser.add_argument(
         "--no-parallel", dest="parallel", action="store_false", default=True,
         help="Do not parallelize building the manifest")
+    parser.add_argument(
+        "--max-cpu-count", type=int, default=None,
+        help="The maximum number of CPU cores to use when running in parallel.")
     return parser
 
 

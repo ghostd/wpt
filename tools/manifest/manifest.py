@@ -163,8 +163,8 @@ class Manifest(object):
                     for test in tests:
                         yield test
 
-    def update(self, tree, parallel=True):
-        # type: (Iterable[Tuple[Text, Optional[Text], bool]], bool) -> bool
+    def update(self, tree, parallel=True, max_cpu_count=None):
+        # type: (Iterable[Tuple[Text, Optional[Text], bool]], bool, Optional[int]) -> bool
         """Update the manifest given an iterable of items that make up the updated manifest.
 
         The iterable must either generate tuples of the form (SourceFile, True) for paths
@@ -227,17 +227,21 @@ class Manifest(object):
             changed = True
 
         if parallel and len(to_update) > 25 and cpu_count() > 1:
+            processes = cpu_count()
+            if max_cpu_count is not None:
+                processes = min(processes, max_cpu_count)
+
             # 25 derived experimentally (2020-01) to be approximately
             # the point at which it is quicker to create Pool and
             # parallelize this
-            pool = Pool()
+            pool = Pool(processes)
 
             # chunksize set > 1 when more than 10000 tests, because
             # chunking is a net-gain once we get to very large numbers
             # of items (again, experimentally, 2020-01)
             chunksize = max(1, len(to_update) // 10000)
-            logger.debug("Doing a multiprocessed update. "
-                "CPU count: %s, chunksize: %s" % (cpu_count(), chunksize))
+            logger.debug("Doing a multiprocessed update. CPU count: %s, "
+                "processes: %s, chunksize: %s" % (cpu_count(), processes, chunksize))
             results = pool.imap_unordered(compute_manifest_items,
                                           to_update,
                                           chunksize=chunksize
@@ -385,7 +389,8 @@ def load_and_update(tests_root,  # type: Union[Text, bytes]
                     types=None,  # type: Optional[Container[Text]]
                     write_manifest=True,  # type: bool
                     allow_cached=True,  # type: bool
-                    parallel=True  # type: bool
+                    parallel=True,  # type: bool
+                    max_cpu_count=None  # type: Optional[int]
                     ):
     # type: (...) -> Manifest
 
@@ -407,7 +412,8 @@ def load_and_update(tests_root,  # type: Union[Text, bytes]
                             types=types,
                             write_manifest=write_manifest,
                             allow_cached=allow_cached,
-                            parallel=parallel)
+                            parallel=parallel,
+                            max_cpu_count=max_cpu_count)
 
 
 def _load_and_update(tests_root,  # type: Text
@@ -421,7 +427,8 @@ def _load_and_update(tests_root,  # type: Text
                      types=None,  # type: Optional[Container[Text]]
                      write_manifest=True,  # type: bool
                      allow_cached=True,  # type: bool
-                     parallel=True  # type: bool
+                     parallel=True,  # type: bool
+                     max_cpu_count=None  # type: Optional[int]
                      ):
     # type: (...) -> Manifest
 
@@ -455,7 +462,7 @@ def _load_and_update(tests_root,  # type: Text
             try:
                 tree = vcs.get_tree(tests_root, manifest, manifest_path, cache_root,
                                     working_copy, rebuild)
-                changed = manifest.update(tree, parallel)
+                changed = manifest.update(tree, parallel, max_cpu_count)
                 break
             except InvalidCacheError:
                 logger.warning("Manifest cache was invalid, doing a complete rebuild")
